@@ -16,7 +16,7 @@ loop: jmp loop ; infinite loop
 
 %include "./print/boot_sect_print.asm"
 %include "./print/boot_sect_print_hex.asm"
-%include "./boot_sect_disk.asm"
+%include "./disk/boot_sect_disk.asm"
 
 ; zero padding and magic bios number
 times 510-($-$$) db 0
