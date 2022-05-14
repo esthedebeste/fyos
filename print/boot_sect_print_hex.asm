@@ -1,3 +1,9 @@
+print_0xhex:
+    mov ah, 0x0e ; tty mode
+    mov al, '0'
+    int 0x10
+    mov al, 'x'
+    int 0x10
 print_hex:
     pusha
     mov cx, 0
@@ -26,11 +32,3 @@ print_hex_done:
     popa
     ret
 
-print_0xhex:
-    mov ah, 0x0e ; tty mode
-    mov al, '0'
-    int 0x10
-    mov al, 'x'
-    int 0x10
-    call print_hex
-    ret
