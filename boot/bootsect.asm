@@ -9,7 +9,7 @@ mov bx, startup_str
 mov cx, startup_str_end
 call println
 mov bx, KERNEL_OFFSET ; Read from disk and store in 0x1000
-mov dh, 2
+mov dh, 4
 mov dl, [BOOT_DRIVE]
 call disk_load
 call switch_to_pm
@@ -23,12 +23,12 @@ BEGIN_PM: ; after switch to 32-bit protected mode
 INF_LOOP: jmp INF_LOOP ; should never get here
 
 
-%include "./print/boot_sect_print.asm"
-%include "./print/boot_sect_print_hex.asm"
-%include "./disk/boot_sect_disk.asm"
-%include "./32bit/32bit-gdt.asm"
-%include "./print/32bit-print.asm"
-%include "./32bit/32bit-switch.asm"
+%include "./print.asm"
+%include "./print-hex.asm"
+%include "./disk.asm"
+%include "./gdt.asm"
+%include "./32bit-print.asm"
+%include "./switch-pm.asm"
 
 
 BOOT_DRIVE: db 0
