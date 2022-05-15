@@ -10,7 +10,7 @@ print_string_pm:
 
 print_string_pm_loop:
     cmp ebx, ecx
-    jne print_string_pm_done
+    je print_string_pm_done
     mov al, [ebx]
     mov ah, WHITE_ON_BLACK
     mov [edx], ax

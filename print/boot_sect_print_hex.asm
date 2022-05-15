@@ -1,3 +1,4 @@
+[bits 16]
 print_0xhex:
     mov ah, 0x0e ; tty mode
     mov al, '0'

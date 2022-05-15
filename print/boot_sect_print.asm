@@ -1,3 +1,4 @@
+[bits 16]
 print:
     pusha
 
@@ -5,7 +6,7 @@ print:
 print_body:
     ; check current != end
     cmp bx, cx
-    je print_done
+    jge print_done
     ; print char
     mov al, [bx]
     mov ah, 0x0e ; tty mode

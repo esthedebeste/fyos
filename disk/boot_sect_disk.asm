@@ -1,3 +1,4 @@
+[bits 16]
 ; load 'dh' sectors from drive 'dl' into es:bx
 disk_load:
     pusha
@@ -5,6 +6,7 @@ disk_load:
 
     mov ah, 0x02 ; 0x02 = read
     mov al, dh ; number of sectors to read
+    mov ch, 0x00 ; track/cilinder number
     mov cl, 0x02 ; base sector, 0x02 = first sector that isn't boot sector
     ; mov dl, dl ; drive number
     mov dh, 0x00 ; head number (0x00 .. 0x0f)
@@ -23,15 +25,21 @@ disk_load:
 disk_error:
     mov bx, disk_error_str
     mov cx, disk_error_str_end
-    call println
-    mov dh, ah ; ah = error code
+    call print
+    ; dl = drive number
+    call print_0xhex
+    mov bx, disk_error_str2
+    mov cx, disk_error_str2_end
+    call print
+    mov dx, 0
+    mov dl, ah ; ah = error code
     call print_0xhex
     jmp inf_loop
 
 sectors_error:
     mov bx, sectors_error_str
     mov cx, sectors_error_str_end
-    call println
+    call print
     mov dh, dh ; requested number of sectors
     call print_0xhex
     mov bx, sectors_error_str2
@@ -40,11 +48,13 @@ sectors_error:
     jmp inf_loop
 
 inf_loop:
-    jmp $
+    jmp inf_loop
 
-disk_error_str: db "disk read error, error code = "
+disk_error_str: db "error, drive id = "
 disk_error_str_end:
-sectors_error_str: db "disk read error, requested "
+disk_error_str2: db ", error code = "
+disk_error_str2_end:
+sectors_error_str: db "error, requested "
 sectors_error_str_end:
 sectors_error_str2: db " sectors, got "
 sectors_error_str2_end:
