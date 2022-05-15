@@ -1,14 +1,21 @@
 include "../drivers/vga-text.fy"
+include "../util/types"
+include "../util/memory"
+include "../util/stringify"
 
 inline fun(char[generic Len]) ptr() &let alloc = this
 
 fun main() {
     vga_clear_screen()
+    for (let i: uint = 0; i < 24; i += 1) {
+        let str: char[5]
+        const len = i.to_strbuf(&str)
+		str[len] = '\n'
+        vga_print_str(str, len + 1)
+    }
+
     vga_print("Hello from the kernel!\n".ptr())
-    vga_print_at("X".ptr(), (1b, 6b))
-    vga_print_at("This text spans multiple lines".ptr(), (75b, 10b))
-    vga_print_at("There is a line\nbreak".ptr(), (0b0b, 20b))
-    vga_print("There is a line\nbreak".ptr())
-    vga_print_at("What happens when we run out of space?".ptr(), (45b, 24b))
-    0
+    vga_print("This\nwill\nscroll\ndown\na\ncouple\nlines".ptr())
+	;&memset; // always include memset because llvm optimizations want it
+	0
 }

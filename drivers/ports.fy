@@ -1,4 +1,4 @@
-include "../types"
+include "../util/types"
 
 /** Read a byte from a port */
 fun port_byte_in(port: uint16): uint8

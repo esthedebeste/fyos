@@ -1,14 +1,15 @@
 include "./ports.fy"
+include "../util/types"
 
-const screen_width: uint16 = 80
-const screen_height: uint16 = 25
+const screen_width: uint32 = 80
+const screen_height: uint32 = 25
 struct ScreenPos {
-    x: uint8,
-    y: uint8
+    x: uint,
+    y: uint
 }
-inline fun(ScreenPos | *ScreenPos) index(): uint16
-    this.x as uint16 + (this.y as uint16) * screen_width
-inline fun ScreenPos(index: uint16) create ScreenPos { x = index % screen_width, y = index / screen_width }
+inline fun(ScreenPos | *ScreenPos) index(): uint32
+    this.x + this.y * screen_width
+inline fun ScreenPos(index: uint32) create ScreenPos { x = index % screen_width, y = index / screen_width }
 const video_memory: { ch: char, style: uint8 }[] = 0xb8000
 const white_fg_black_bg: uint8 = 0x0f
 
@@ -24,7 +25,7 @@ fun vga_get_cursor_position(): uint16 {
 }
 inline fun vga_get_cursor_pos() ScreenPos(vga_get_cursor_position())
 
-fun vga_set_cursor_position(pos: uint16): void {
+fun vga_set_cursor_position(pos: uint32): void {
     port_byte_out(reg_screen_ctrl, 14)
     port_byte_out(reg_screen_data, pos >> 8) // set high byte
     port_byte_out(reg_screen_ctrl, 15)
@@ -48,7 +49,18 @@ fun vga_print_char_at(char: char, pos: *ScreenPos, style: uint8): void {
             pos.y += 1
         }
     }
-    pos.y %= screen_height // overflow from screen_height to 0
+    // scroll down if needed
+    if (pos.y >= screen_height) {
+        for (let i = 1; i < screen_height; i += 1)
+            memcpy(&video_memory[i * screen_width],
+				   &video_memory[(i-1) * screen_width],
+            	   screen_width)
+
+        /* Blank last line */
+        const last_line = &video_memory[(screen_height-1) * screen_width]
+        for (i = 0; i < screen_width; i += 1) last_line[i] = null
+		pos.y -= 1
+    }
     null
 }
 
@@ -62,14 +74,17 @@ fun vga_print_str_at(str: *char, len: uint, poss: ScreenPos | *ScreenPos) {
 inline fun vga_print_at(str: *char[generic Len], poss: ScreenPos | *ScreenPos)
     vga_print_str_at(str, Len, poss)
 
+inline fun vga_print_str(str: *char, len: uint)
+    vga_set_cursor_pos(vga_print_str_at(str, len, vga_get_cursor_pos()))
+
 inline fun vga_print(str: *char[generic Len])
-    vga_set_cursor_pos(vga_print_str_at(str, Len, vga_get_cursor_pos()))
+    vga_print_str(str as *char, Len)
 
 fun vga_clear_screen(): void {
-    const size = screen_width * screen_height;
+    const size = screen_width * screen_height
     for (let i = 0; i < size; i += 1) {
-        video_memory[i].ch = ' ';
-        video_memory[i].style = white_fg_black_bg;
+        video_memory[i].ch = ' '
+        video_memory[i].style = white_fg_black_bg
     }
     vga_set_cursor_position(0);
     ()

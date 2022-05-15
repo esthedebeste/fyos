@@ -9,7 +9,7 @@ mov bx, startup_str
 mov cx, startup_str_end
 call println
 mov bx, KERNEL_OFFSET ; Read from disk and store in 0x1000
-mov dh, 4
+mov dh, 16 ; read 16 sectors, kernel might get big
 mov dl, [BOOT_DRIVE]
 call disk_load
 call switch_to_pm
