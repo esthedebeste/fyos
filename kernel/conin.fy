@@ -4,11 +4,15 @@ include "./conout"
 
 fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) wait_for_key(): { status: EFI_STATUS, key: EFI_INPUT_KEY } {
 	let idx: UINTN // unused
-	const event_wait_status = boot_services.WaitForEvent(1, &this.WaitForKey, &idx)
-	if(event_wait_status != EFI_SUCCESS) return (event_wait_status as EFI_STATUS, null as EFI_INPUT_KEY)
+	let status: EFI_STATUS = EFI_NOT_READY
 	let key: EFI_INPUT_KEY
-	const key_status = this.ReadKeyStroke(this, &key)
-	return (key_status, key)
+	while (status == EFI_NOT_READY) {
+		while (status == EFI_NOT_READY)
+			status = boot_services.WaitForEvent(1, &this.WaitForKey, &idx)
+		if(status != EFI_SUCCESS) return (status, null as EFI_INPUT_KEY)
+		status = this.ReadKeyStroke(this, &key)
+	}
+	return (status, key)
 }
 
 fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) readline(): { status: EFI_STATUS, string: *CHAR16, length: UINTN } {
@@ -32,7 +36,8 @@ fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) readline(): { status: EFI_STATUS, string: *
 			// backspace character
 			if(length > 0) {
 				length -= 1
-				conout.print_string("\x08"c 16)
+				// move cursor back one character and overwrite with space
+				conout.print_string("\x08 \x08"c 16)
 			} 0
 		} else {
 			string[length] = key.UnicodeChar
