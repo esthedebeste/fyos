@@ -15,7 +15,7 @@ fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) wait_for_key(): { status: EFI_STATUS, key: 
 	return (status, key)
 }
 
-fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) readline(): { status: EFI_STATUS, string: *CHAR16, length: UINTN } {
+fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) read_until(chars: *CHAR16, count: UINTN, endstr: *CHAR16): { status: EFI_STATUS, string: *CHAR16, length: UINTN } {
 	let string: *CHAR16 = calloc(1024, sizeof(CHAR16))
 	let capacity: uint_ptrsize = 1024
 	let length: uint_ptrsize = 0
@@ -29,10 +29,12 @@ fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) readline(): { status: EFI_STATUS, string: *
 			capacity *= 2
 			string = reallocarray(string, capacity, sizeof(CHAR16))
 		}
-		if(key.UnicodeChar == '\n' || key.UnicodeChar == '\r') {
-			conout.print_string("\r\n"c 16)
-			return (EFI_SUCCESS, string, length) 0
-		} else if(key.UnicodeChar == '\x08') {
+		for(let i = 0; i < count; i += 1)
+			if(key.UnicodeChar == chars[i]) {
+				conout.print_string(endstr)
+				return (EFI_SUCCESS, string, length) 0
+			}
+		if(key.UnicodeChar == '\x08') {
 			// backspace character
 			if(length > 0) {
 				length -= 1
@@ -48,3 +50,6 @@ fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) readline(): { status: EFI_STATUS, string: *
 	}
 	null // unreachable
 }
+
+fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) readline() this.read_until("\r\n"c 16, 2, "\r\n"c 16)
+fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) readword() this.read_until(" "c 16, 1, " "c 16)

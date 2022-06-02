@@ -161,7 +161,7 @@ fun main cc(EFIAPI) (ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
 		}
 	}
 	conout.print_string("Exiting...\r\n"c 16)
-	boot_services.Stall(10 * SECONDS)
+	boot_services.Stall(SHUTDOWN_DELAY)
 	EFI_SUCCESS
 }
 
