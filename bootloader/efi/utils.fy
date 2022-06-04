@@ -1,5 +1,18 @@
-include "../fy-efi/efi" // char16, efi_time, efi_simple_text_output_protocol, efi_status
+include "../../fy-efi/efi" // char16, efi_time, efi_simple_text_output_protocol, efi_status
 const nullptr = null as *uint8
+
+const SECONDS: UINTN = 1000000 // BootServices.Stall is in microseconds
+const SHUTDOWN_DELAY: UINTN = 5 * SECONDS
+
+fun shutdown(status: EFI_STATUS) {
+	if(status != EFI_SUCCESS) {
+		conout.print("Error: "c 16)
+		conout.println(status_to_cstr(status))
+	}
+	conout.println("Shutting down..."c 16)
+	boot_services.Stall(SHUTDOWN_DELAY)
+	runtime_services.ResetSystem(EfiResetShutdown, status, 0, null)
+}
 
 fun uint64tohex(num: uint64): CHAR16[11] {
 	let n: uint64 = num
@@ -9,14 +22,14 @@ fun uint64tohex(num: uint64): CHAR16[11] {
 	str[10] = 0
 	for (let i = 0; i < 8; i += 1) {
 		const c = (n & 0xf) + '0'
-		str[9 - i] = if (c > '9') c - '9' + 'a' else c
+		str[9 - i] = if (c > '9') c - '9' + 'a' - 1 else c
 		n = n >> 4
 	}
 	str
 }
 inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print_hex(num: uint64) {
 	let str = uint64tohex(num)
-	this.print_string(&str)
+	this.print(&str)
 }
 // '0'-padded at the start
 fun uint64tostr(num: uint64): CHAR16[21] {
@@ -34,7 +47,8 @@ inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print_uint64(num: uint64) {
 	let strptr: *CHAR16 = &str
 	// remove '0'-padding
 	while(strptr[0] == '0') strptr += 1
-	this.print_string(strptr)
+	if(strptr[0] == 0) strptr = "0"c 16
+	this.print(strptr)
 }
 
 // DD-MM-YYYY HH:MM:SS.mmm
@@ -65,7 +79,7 @@ fun time_to_str(time: EFI_TIME): CHAR16[24] {
 }
 inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print_time(time: EFI_TIME) {
 	let str = time_to_str(time)
-	this.print_string(&str)
+	this.print(&str)
 }
 
 // From table D-3 in the UEFI 2.9 spec

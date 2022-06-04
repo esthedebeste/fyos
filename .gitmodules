@@ -1,3 +1,6 @@
 [submodule "fy-efi"]
 	path = fy-efi
 	url = https://github.com/tbhmens/fy-efi
+[submodule "zap-font"]
+	path = zap-font
+	url = http://git.zap.org.au/git/console-fonts-zap.git/

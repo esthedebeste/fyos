@@ -1,3 +1,3 @@
 # os-from-scratch
 
-OS from scratch, roughly following [cfenollosa/os-tutorial](https://github.com/cfenollosa/os-tutorial)
+OS from scratch, fully written in [fy](https://github.com/tbhmens/fylang)!

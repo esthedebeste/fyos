@@ -31,7 +31,7 @@ fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) read_until(chars: *CHAR16, count: UINTN, en
 		}
 		for(let i = 0; i < count; i += 1)
 			if(key.UnicodeChar == chars[i]) {
-				conout.print_string(endstr)
+				conout.print(endstr)
 				return (EFI_SUCCESS, string, length) 0
 			}
 		if(key.UnicodeChar == '\x08') {
@@ -39,13 +39,13 @@ fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) read_until(chars: *CHAR16, count: UINTN, en
 			if(length > 0) {
 				length -= 1
 				// move cursor back one character and overwrite with space
-				conout.print_string("\x08 \x08"c 16)
+				conout.print("\x08 \x08"c 16)
 			} 0
 		} else {
 			string[length] = key.UnicodeChar
 			length += 1
 			char_str[0] = key.UnicodeChar
-			conout.print_string(&char_str) 0
+			conout.print(&char_str) 0
 		}
 	}
 	null // unreachable
