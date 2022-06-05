@@ -45,34 +45,34 @@ fun check_kernel_header(header: Elf64Header) {
 	   header.ident.magic[1] != 'E' ||
 	   header.ident.magic[2] != 'L' ||
 	   header.ident.magic[3] != 'F') {
-		conout.println("Kernel file is not an ELF file"c 16)
+		println("Kernel file is not an ELF file"c 16)
 		return false
 	}
 	if(header.ident.class != ELF_CLASS_64) {
-		conout.println("Kernel file is not 64-bit"c 16)
+		println("Kernel file is not 64-bit"c 16)
 		return false
 	}
 	if(header.ident.endianness != ELF_LITTLE_ENDIAN) {
-		conout.println("Kernel file is not little-endian"c 16)
+		println("Kernel file is not little-endian"c 16)
 		return false
 	}
 	if(header.ident.version != ELF_VERSION_CURRENT || header.version != ELF_VERSION_CURRENT) {
-		conout.println("Kernel file is not version 1"c 16)
+		println("Kernel file is not version 1"c 16)
 		return false
 	}
 	if(header.machine != ELF_MACHINE_X86_64) {
-		conout.println("Kernel file is not x86_64"c 16)
+		println("Kernel file is not x86_64"c 16)
 		return false
 	}
 	if(header.elf_type != ELF_TYPE_EXEC) {
-		conout.println("Kernel file is not an executable"c 16)
+		println("Kernel file is not an executable"c 16)
 		return false
 	}
 	if(header.phentsize != sizeof(Elf64ProgramHeader)) {
-		conout.print("Kernel file has invalid program header size, expected"c 16)
-		conout.print_uint64(sizeof(Elf64ProgramHeader))
-		conout.print("but got"c 16)
-		conout.print_uint64(header.phentsize)
+		print("Kernel file has invalid program header size, expected"c 16)
+		print_uint64(sizeof(Elf64ProgramHeader))
+		print("but got"c 16)
+		print_uint64(header.phentsize)
 		conout.newline()
 		return false
 	}
@@ -101,32 +101,32 @@ fun load_psf1_font(dir: *EFI_FILE_PROTOCOL, path: *CHAR16): EfiResult<PSF1_Font>
 	const info = file.get_info().unwrap("Failed to get info of PSF1 font file"c 16)
 	const size = info.FileSize
 	if(size < sizeof(PSF1_Header)) {
-		conout.println("PSF1 font file is too small for a valid PSF1 header"c 16)
+		println("PSF1 font file is too small for a valid PSF1 header"c 16)
 		return create EfiResult<PSF1_Font> { status = EFI_INVALID_PARAMETER }
 	}
 	let header: PSF1_Header
 	let header_size = sizeof(PSF1_Header)
 	const status = file.Read(file, &header_size, &header)
 	if(status != EFI_SUCCESS) {
-		conout.println("Failed to read PSF1 font file header"c 16)
+		println("Failed to read PSF1 font file header"c 16)
 		return create EfiResult<PSF1_Font> { status = status }
 	}
 	if(header.magic[0] != PSF1_MAGIC0 || header.magic[1] != PSF1_MAGIC1) {
-		conout.println("PSF1 font file has invalid magic"c 16)
+		println("PSF1 font file has invalid magic"c 16)
 		return create EfiResult<PSF1_Font> { status = EFI_INVALID_PARAMETER }
 	}
 
 	const glyph_count: uint = if(header.mode & PSF1_MODE512) 512 else 256
 	let glyph_size = header.charsize as uint * glyph_count
 	if(size < sizeof(PSF1_Header) + glyph_size) {
-		conout.println("PSF1 font file is too small to fit all glyphs"c 16)
+		println("PSF1 font file is too small to fit all glyphs"c 16)
 		return create EfiResult<PSF1_Font> { status = EFI_INVALID_PARAMETER }
 	}
 	file.SetPosition(file, sizeof(PSF1_Header))
 	const glyphs: *uint8 = efi_malloc(glyph_size)
 	const status = file.Read(file, &glyph_size, glyphs)
 	if(status != EFI_SUCCESS) {
-		conout.println("Failed to read PSF1 font file glyphs"c 16)
+		println("Failed to read PSF1 font file glyphs"c 16)
 		return create EfiResult<PSF1_Font> { status = status }
 	}
 	efi_free(info)
@@ -136,94 +136,156 @@ fun load_psf1_font(dir: *EFI_FILE_PROTOCOL, path: *CHAR16): EfiResult<PSF1_Font>
 	})
 }
 
+include "./bootinfo.fy"
 fun efi_main(ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
 	conout.clear_screen()
 	const loaded_image = loaded_image_protocol().unwrap("Failed to get loaded image protocol"c 16)
 	const root_dir = load_root_image_dir(loaded_image).unwrap("Failed to get root directory of image"c 16)
 	const kernel_file = root_dir.open("kernel.elf"c 16).unwrap("Failed to open kernel.elf"c 16)
-	conout.println("Opened kernel.elf"c 16)
+	println("Opened kernel.elf"c 16)
 	let header: Elf64Header;
 	{
 		const file_info = kernel_file.get_info().unwrap("Failed to get kernel.elf info"c 16)
 		let header_size = sizeof(Elf64Header)
 		if(file_info.Size < header_size) {
-			conout.println("Kernel file is too small"c 16)
+			println("Kernel file is too small"c 16)
 			return EFI_ERR
 		}
 		efi_free(file_info)
 		const status = kernel_file.Read(kernel_file, &header_size, &header)
 		if(status != EFI_SUCCESS) {
-			conout.println("Failed to read header"c 16)
+			println("Failed to read header"c 16)
 			return status
 		}
 	}
 	if(!check_kernel_header(header)) return EFI_ERR
-	conout.println("Kernel file is valid"c 16)
+	println("Kernel file is valid"c 16)
 
-	let program_headers: *Elf64ProgramHeader = efi_malloc(header.phnum * sizeof(Elf64ProgramHeader))
+	let program_headers: *Elf64ProgramHeader = efi_malloc(header.phnum * header.phentsize)
 	{
 		const status = kernel_file.SetPosition(kernel_file, header.phoff)
 		if(status != EFI_SUCCESS) {
 			conout.println("Failed to set position in kernel file"c 16)
 			return status
 		}
-		let phsize = header.phnum * sizeof(Elf64ProgramHeader)
+		let phsize = header.phnum * header.phentsize
 		const status = kernel_file.Read(kernel_file, &phsize, program_headers)
 		if(status != EFI_SUCCESS) {
-			conout.println("Failed to read kernel program headers"c 16)
+			println("Failed to read kernel program headers"c 16)
 			return status
 		}
 	}
 	const max_program_header = program_headers + header.phnum
 	let kernel_start_addr: uint64 = 0
+	let total_bytes: uint64 = 0
+	let alloc_points: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
+	let requested_bytes: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
+	let requested_points: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
+	let pt_load_headers: *uint1 = efi_malloc(sizeof(uint1) * header.phnum)
 	for(let i: uint64 = 0; i < header.phnum; i += 1) {
-		const header: *Elf64ProgramHeader = program_headers + i
-		if(header.ptype == ELF_PT_LOAD) {
-			const pages = (header.memsz + 0xfff) / 0x1000
-			const status = boot_services.AllocatePages(AllocateAnyPages, EfiLoaderData, pages, &kernel_start_addr)
+		const pheader: *Elf64ProgramHeader = (program_headers as *uint8) + i * header.phentsize
+		if(pheader.ptype == ELF_PT_LOAD) {
+			const bytes = pheader.memsz
+			let alloc_point: uint64 = 0
+			print("Allocating "c 16) print_uint64(bytes) print(" bytes at "c 16) print_hex(pheader.vaddr) conout.newline()
+			alloc_point = efi_malloc(bytes)
+			print("Allocated at "c 16) print_hex(alloc_point) conout.newline()
+			alloc_points[i] = alloc_point
+			requested_bytes[i] = bytes
+			requested_points[i] = pheader.vaddr
+			total_bytes += bytes
+			pt_load_headers[i] = true
+			if(alloc_point == nullptr) {
+				println("Failed to allocate memory for segment"c 16)
+				return EFI_ERR
+			}
+			const status = kernel_file.SetPosition(kernel_file, pheader.offset)
 			if(status != EFI_SUCCESS) {
-				conout.println("Failed to allocate memory for segment"c 16)
+				println("Failed to set position in kernel file"c 16)
 				return status
 			}
-			kernel_file.SetPosition(kernel_file, header.offset)
-			const status = kernel_file.Read(kernel_file, &header.filesz, kernel_start_addr)
+			const status = kernel_file.Read(kernel_file, &pheader.filesz, alloc_point)
 			if(status != EFI_SUCCESS) {
-				conout.println("Failed to read segment"c 16)
+				println("Failed to read segment"c 16)
 				return status
 			}
 		} else {
-			conout.print("Skipping program header of non PT_LOAD type: "c 16)
-			conout.print_hex(header.ptype)
+			pt_load_headers[i] = false
+			print("Skipping program header of non PT_LOAD type: "c 16)
+			print_hex(pheader.ptype)
 			conout.newline()
 		}
 	}
-	conout.println("Kernel loaded"c 16)
-	const kernel_start: *fun cc(X8664SysV)(*Framebuffer, *PSF1_Font): uint32 = kernel_start_addr + header.entry
-	let framebuffer: Framebuffer = init_framebuffer().unwrap("Failed to initialize framebuffer"c 16)
-	conout.println("Framebuffer initialized"c 16)
-	conout.print("Framebuffer pixel base: "c 16) conout.print_hex(framebuffer.pixels) conout.newline()
-	conout.print("Framebuffer size: "c 16) conout.print_uint64(framebuffer.size) conout.newline()
-	conout.print("Framebuffer width: "c 16) conout.print_uint64(framebuffer.width) conout.newline()
-	conout.print("Framebuffer height: "c 16) conout.print_uint64(framebuffer.height) conout.newline()
-	conout.print("Framebuffer pixels per scanline: "c 16) conout.print_uint64(framebuffer.pixels_per_scanline) conout.newline()
 
-	conout.println("Loading PSF1 font..."c 16)
+	print("Allocating "c 16) print_uint64(total_bytes) print(" bytes for the full kernel"c 16) conout.newline()
+	let full_kernel_mem: *uint8 = efi_malloc(total_bytes)
+	if(full_kernel_mem == nullptr) {
+		println("Failed to allocate memory for kernel"c 16)
+		return EFI_ERR
+	}
+	println("Copying kernel parts to final location"c 16)
+	for(let i: uint64 = 0; i < header.phnum; i += 1)
+	if(pt_load_headers[i]) {
+		print("Copying "c 16) print_uint64(requested_bytes[i]) print(" bytes from "c 16) print_hex(alloc_points[i]) print(" to "c 16) print_hex(full_kernel_mem + requested_points[i]) conout.newline()
+		efi_memcpy(full_kernel_mem + requested_points[i], alloc_points[i], requested_bytes[i])
+		print("Freeing "c 16) print_uint64(requested_bytes[i]) print(" bytes at "c 16) print_hex(alloc_points[i]) conout.newline()
+		boot_services.FreePages(alloc_points[i], requested_bytes[i])
+	}
+	println("Kernel loaded"c 16)
+	const kernel_start: *fun cc(X8664SysV)(*BootInfo): uint32 = full_kernel_mem + header.entry
+	let framebuffer: Framebuffer = init_framebuffer().unwrap("Failed to initialize framebuffer"c 16)
+	println("Framebuffer initialized"c 16)
+	print("Framebuffer pixel base: "c 16) print_hex(framebuffer.pixels) conout.newline()
+	print("Framebuffer size: "c 16) print_uint64(framebuffer.size) conout.newline()
+	print("Framebuffer width: "c 16) print_uint64(framebuffer.width) conout.newline()
+	print("Framebuffer height: "c 16) print_uint64(framebuffer.height) conout.newline()
+	print("Framebuffer pixels per scanline: "c 16) print_uint64(framebuffer.pixels_per_scanline) conout.newline()
+
+	println("Loading PSF1 font..."c 16)
 	let font: PSF1_Font = load_psf1_font(root_dir, "font.psf"c 16).unwrap("Failed to load PSF1 font"c 16)
-	conout.println("Loaded PSF1 font"c 16)
-	conout.println("Starting kernel..."c 16)
-	const kernel_ret = kernel_start(&framebuffer, &font)
-	conout.print("Kernel returned: "c 16)
-	conout.print_uint64(kernel_ret)
-	conout.print("/"c 16)
-	conout.print_hex(kernel_ret)
-	conout.newline()
+	println("Loaded PSF1 font"c 16)
+
+	println("Exiting boot services..."c 16)
+	let memory_map_size: UINTN = 0
+	let memory_map: *EFI_MEMORY_DESCRIPTOR = nullptr
+	let memory_map_key: UINTN = 0
+	let descriptor_size: UINTN = 0
+	let descriptor_version: UINT32 = 0
+	{
+		const status = boot_services.GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version)
+		if(status != EFI_BUFFER_TOO_SMALL) {
+			println("Failed to get memory map size"c 16)
+			return status
+		}
+		memory_map_size += descriptor_size * 2
+		memory_map = efi_malloc(memory_map_size)
+		const status = boot_services.GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version)
+		if(status != EFI_SUCCESS) {
+			println("Failed to get memory map"c 16)
+			return status
+		}
+	}
+	const status = boot_services.ExitBootServices(image_handle, memory_map_key)
+	if(status != EFI_SUCCESS) {
+		println("Failed to exit boot services"c 16)
+		return status
+	}
+
+	let boot_info = create BootInfo {
+		framebuffer = framebuffer,
+		font = font,
+		mem_map = memory_map,
+		mem_map_size = memory_map_size,
+		mem_desc_size = descriptor_size,
+	}
+
+	const kernel_ret = kernel_start(&boot_info)
 	EFI_SUCCESS
 }
 
 fun main cc(EFIAPI) (ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
 	init_efi_globals(ih, st)
 	const status = efi_main(ih, st)
-	conout.println("Exited efi_main..."c 16)
 	shutdown(status)
 	status
 }

@@ -10,7 +10,7 @@ inline fun EfiResult(status: EFI_STATUS, value: generic Ret)
 
 fun(EfiResult<generic Ret>) unwrap(or_print: *CHAR16) {
 	if(this.status != EFI_SUCCESS) {
-		conout.println(or_print)
+		println(or_print)
 		shutdown(this.status)
 		// shutdown stops execution here if status is not EFI_SUCCESS
 	}

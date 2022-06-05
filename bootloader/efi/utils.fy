@@ -4,13 +4,21 @@ const nullptr = null as *uint8
 const SECONDS: UINTN = 1000000 // BootServices.Stall is in microseconds
 const SHUTDOWN_DELAY: UINTN = 5 * SECONDS
 
+fun print(str: *CHAR16) conout.print(str)
+fun println(str: *CHAR16) conout.println(str)
 fun shutdown(status: EFI_STATUS) {
 	if(status != EFI_SUCCESS) {
-		conout.print("Error: "c 16)
-		conout.println(status_to_cstr(status))
+		print("Error: "c 16)
+		println(status_to_cstr(status))
+		while(true) 0 // halt
 	}
-	conout.println("Shutting down..."c 16)
-	boot_services.Stall(SHUTDOWN_DELAY)
+	let time: EFI_TIME
+	runtime_services.GetTime(&time, null)
+	let target = time
+	target.Second += 5
+	while(time.Second < target.Second)
+		runtime_services.GetTime(&time, null)
+
 	runtime_services.ResetSystem(EfiResetShutdown, status, 0, null)
 }
 
@@ -31,6 +39,7 @@ inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print_hex(num: uint64) {
 	let str = uint64tohex(num)
 	this.print(&str)
 }
+fun print_hex(num: uint64) conout.print_hex(num)
 // '0'-padded at the start
 fun uint64tostr(num: uint64): CHAR16[21] {
 	let n: uint64 = num
@@ -50,6 +59,7 @@ inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print_uint64(num: uint64) {
 	if(strptr[0] == 0) strptr = "0"c 16
 	this.print(strptr)
 }
+fun print_uint64(num: uint64) conout.print_uint64(num)
 
 // DD-MM-YYYY HH:MM:SS.mmm
 fun time_to_str(time: EFI_TIME): CHAR16[24] {
@@ -81,6 +91,7 @@ inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print_time(time: EFI_TIME) {
 	let str = time_to_str(time)
 	this.print(&str)
 }
+fun print_time(time: EFI_TIME) conout.print_time(time)
 
 // From table D-3 in the UEFI 2.9 spec
 fun status_to_cstr(status: EFI_STATUS): *CHAR16

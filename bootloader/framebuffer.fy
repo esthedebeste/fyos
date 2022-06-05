@@ -11,3 +11,18 @@ struct Framebuffer {
 	height: uint32,
 	pixels_per_scanline: uint32,
 }
+
+
+inline fun(Framebuffer) set_pixel(x: uint, y: uint, color: RGBAColor)
+	this.pixels[y * this.pixels_per_scanline + x] = color
+
+fun(Framebuffer) move_up(up: uint) {
+	for(let y = 0; y < this.height - up; y += 1)
+		for(let x = 0; x < this.width; x += 1)
+			this.pixels[y * this.pixels_per_scanline + x] = this.pixels[(y + up) * this.pixels_per_scanline + x]
+	// black out the bottom
+	for(let y = this.height - up; y < this.height; y += 1)
+		for(let x = 0; x < this.width; x += 1)
+			this.pixels[y * this.pixels_per_scanline + x] = create RGBAColor { red = 0, green = 0, blue = 0, alpha = 0 }
+	null
+}

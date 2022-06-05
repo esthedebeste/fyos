@@ -11,10 +11,13 @@ fun efi_malloc(size: uint_ptrsize): *uint8 {
 fun efi_free(ptr: *uint8): EFI_STATUS
 	boot_services.FreePool(ptr)
 
-fun efi_memcpy(dst: *uint8, src: *uint8, size: uint_ptrsize) {
-	boot_services.CopyMem(dst, src, size)
+inline fun memcpy always_compile(true) (dst: *uint8, src: *uint8, size: uint_ptrsize): *uint8 {
+	for(let i: uint_ptrsize = 0; i < size; i += 1)
+		dst[i] = src[i]
 	dst
 }
+
+fun efi_memcpy(dst: *uint8, src: *uint8, size: uint_ptrsize) memcpy(dst, src, size)
 
 fun efi_memset(dst: *uint8, value: uint8, size: uint_ptrsize) {
 	boot_services.SetMem(dst, size, value)
