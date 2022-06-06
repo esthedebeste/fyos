@@ -4,8 +4,6 @@ const nullptr = null as *uint8
 const SECONDS: UINTN = 1000000 // BootServices.Stall is in microseconds
 const SHUTDOWN_DELAY: UINTN = 5 * SECONDS
 
-fun print(str: *CHAR16) conout.print(str)
-fun println(str: *CHAR16) conout.println(str)
 fun shutdown(status: EFI_STATUS) {
 	if(status != EFI_SUCCESS) {
 		print("Error: "c 16)
@@ -15,7 +13,7 @@ fun shutdown(status: EFI_STATUS) {
 	let time: EFI_TIME
 	runtime_services.GetTime(&time, null)
 	let target = time
-	target.Second += 5
+	target.Second += 10
 	while(time.Second < target.Second)
 		runtime_services.GetTime(&time, null)
 
@@ -70,28 +68,40 @@ fun time_to_str(time: EFI_TIME): CHAR16[24] {
 	const min = uint64tostr(time.Minute)
 	const s = uint64tostr(time.Second)
 	const ms = uint64tostr(time.Nanosecond / 1000000)
-	let str: CHAR16[24]
-	str[0] = d[18] str[1] = d[19]
-	str[2] = ("-" 16)[0]
-	str[3] = m[18] str[4] = m[19]
-	str[5] = ("-" 16)[0]
-	str[6] = y[16] str[7] = y[17] str[8] = y[18] str[9] = y[19]
-	str[10] = (" " 16)[0]
-	str[11] = h[18] str[12] = h[19]
-	str[13] = (":" 16)[0]
-	str[14] = min[18] str[15] = min[19]
-	str[16] = (":" 16)[0]
-	str[17] = s[18] str[18] = s[19]
-	str[19] = ("." 16)[0]
-	str[20] = ms[17] str[21] = ms[18] str[22] = ms[19]
-	str[23] = 0
-	str
+	return (
+		d[18], d[19],				// DD
+		("-" 16)[0],				// -
+		m[18], m[19],				// MM
+		("-" 16)[0],				// -
+		y[16], y[17], y[18], y[19]	// YYYY
+		(" " 16)[0],				// -
+		h[18], h[19],				// HH
+		(":" 16)[0],				// :
+		min[18], min[19],			// MM
+		(":" 16)[0],				// :
+		s[18], s[19],				// SS
+		("." 16)[0],				// .
+		ms[17], ms[18], ms[19],		// mmm
+		0 // null-terminator
+	)
 }
 inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print_time(time: EFI_TIME) {
 	let str = time_to_str(time)
 	this.print(&str)
 }
 fun print_time(time: EFI_TIME) conout.print_time(time)
+fun newline() conout.newline()
+
+fun print(v: uint64 | *CHAR16 | *CHAR16[generic Len] | EFI_TIME)
+		 if(typeof(v) == uint64)				conout.print_uint64(v)
+	else if(typeof(v) == *CHAR16)				conout.print(v)
+	else if(typeof(v) == *CHAR16[generic Len])	conout.print(v)
+	else if(typeof(v) == EFI_TIME)				conout.print_time(v)
+
+inline fun println(v: generic V) {
+	print(v)
+	newline()
+}
 
 // From table D-3 in the UEFI 2.9 spec
 fun status_to_cstr(status: EFI_STATUS): *CHAR16

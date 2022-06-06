@@ -1,16 +1,19 @@
-const PSF1_MAGIC0  = 0x36
-const PSF1_MAGIC1  = 0x04
-const PSF1_MODE512 = 0x01
-struct PSF1_Header {
-	magic: uint8[2],
-	mode: uint8,
-	charsize: uint8, // bytes per char
+const PSF2_MAGIC: uint32 = 0x864ab572
+struct PSF2_Header {
+	magic: uint32,
+	version: uint32,
+	headersize: uint32,
+	flags: uint32,
+	numglyphs: uint32,
+	glyphsize: uint32,
+	height: uint32,
+	width: uint32,
 }
 
-struct PSF1_Font {
-	header: PSF1_Header,
+struct PSF2_Font {
+	header: PSF2_Header,
 	glyphs: *uint8,
 }
 
-inline fun(PSF1_Font | *PSF1_Font) glyph(index: uint32): *uint8
-	this.glyphs + index * this.header.charsize
+inline fun(PSF2_Font | *PSF2_Font) glyph(index: uint32): *uint8
+	this.glyphs + index * this.header.glyphsize

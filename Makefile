@@ -22,10 +22,10 @@ $(bindir)/bootloader.efi: $(bindir)/bootloader.obj
 $(bindir)/kernel.elf: $(bindir)/kernel.o
 	ld.lld $(lldflags) $^ -o $@
 
-zap-font/zap-ext-light18.psf:
-	cd zap-font && make zap-ext-light18.psf && cd ..
+zap-font/zap-ext-light20.psf:
+	cd zap-font && make zap-ext-light20.psf && cd ..
 
-$(bindir)/font.psf: zap-font/zap-ext-light18.psf
+$(bindir)/font.psf: zap-font/zap-ext-light20.psf
 	cp $^ $@
 
 bootloader: $(bindir)/bootloader.efi

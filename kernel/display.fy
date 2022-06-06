@@ -3,37 +3,45 @@ include "../bootloader/psf.fy"
 
 struct Display {
 	framebuffer: Framebuffer,
-	font: PSF1_Font,
+	font: PSF2_Font,
 	x: uint,
 	y: uint,
 	color: RGBAColor,
 }
 
-const FONT_WIDTH = 8
-const FONT_HEIGHT = 18
+inline fun(Display) width() this.framebuffer.width
+inline fun(Display) height() this.framebuffer.height
+
 fun(*Display) put_char(char: char) {
 	if(char == '\n') {
-		this.y += FONT_HEIGHT
+		this.y += this.font.header.height
 		this.x = 0
 	} else if(char == '\r') {
 		this.x = 0
 	} else {
 		let font_ptr = this.font.glyph(char)
-		for(let y = this.y; y < this.y + FONT_HEIGHT; y += 1) {
-			for(let x = this.x; x < this.x + FONT_WIDTH; x += 1)
-				if(*font_ptr & (0b10000000 >> (x - this.x)) != 0)
-					this.framebuffer.set_pixel(x, y, this.color)
-			font_ptr += 1
+		const glyph_height = this.font.header.height
+		const glyph_width = this.font.header.width
+		const glyph_byte_width = (glyph_width + 7) / 8
+		for(let y = 0; y < glyph_height; y += 1) {
+			const glyph_row = glyph_byte_width * y
+			for(let x = 0; x < glyph_width; x += 1) {
+				const glyph_byte = font_ptr[glyph_row + x / 8]
+				const glyph_bit = glyph_byte & (0b10000000 >> (x % 8))
+				if(glyph_bit) {
+					this.framebuffer.set_pixel(this.x + x, this.y + y, this.color)
+				}
+			}
 		}
-		this.x += FONT_WIDTH
+		this.x += this.font.header.width
 	}
 	if(this.x >= this.framebuffer.width) {
 		this.x = 0
-		this.y += FONT_HEIGHT
+		this.y += this.font.header.height
 	}
 	if(this.y >= this.framebuffer.height) {
-		this.y = this.framebuffer.height - FONT_HEIGHT
-		this.framebuffer.move_up(FONT_HEIGHT)
+		this.y = this.framebuffer.height - this.font.header.height
+		this.framebuffer.move_up(this.font.header.height)
 	}
 	null
 }
@@ -58,12 +66,12 @@ fun uint64tostr(num: uint64, buffer: *char[20]): *char {
 	let begin = (buffer as *char) + 20
 	let n = num
 	while(n != 0) {
-		begin -= 1;
-		*begin = (n % 10) + '0'
+		begin -= 1
+		begin[0] = (n % 10) + '0'
 		n /= 10 null
 	} else {
-		begin -= 1;
-		*begin = '0' null
+		begin -= 1
+		begin[0] = '0' null
 	}
 	begin
 }

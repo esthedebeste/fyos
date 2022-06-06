@@ -29,7 +29,7 @@ fun(*EFI_SIMPLE_TEXT_INPUT_PROTOCOL) read_until(chars: *CHAR16, count: UINTN, en
 			capacity *= 2
 			string = reallocarray(string, capacity, sizeof(CHAR16))
 		}
-		for(let i = 0; i < count; i += 1)
+		for(let i: UINTN = 0; i < count; i += 1)
 			if(key.UnicodeChar == chars[i]) {
 				conout.print(endstr)
 				return (EFI_SUCCESS, string, length) 0

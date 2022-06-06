@@ -26,3 +26,10 @@ fun(Framebuffer) move_up(up: uint) {
 			this.pixels[y * this.pixels_per_scanline + x] = create RGBAColor { red = 0, green = 0, blue = 0, alpha = 0 }
 	null
 }
+
+fun(Framebuffer) clear() {
+	for(let y = 0; y < this.height; y += 1)
+		for(let x = 0; x < this.width; x += 1)
+			this.pixels[y * this.pixels_per_scanline + x] = create RGBAColor { red = 0, green = 0, blue = 0, alpha = 0 }
+	null
+}
