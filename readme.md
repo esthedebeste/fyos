@@ -1,3 +1,7 @@
-# os-from-scratch
+# fyos
 
-OS from scratch, fully written in [fy](https://github.com/tbhmens/fylang)!
+![fyos's gradient logo](./.media/gradient.png)
+
+64-bit UEFI OS fully from scratch, fully written in [fy](https://github.com/tbhmens/fylang)!
+
+Uses [fy-efi](https://github.com/tbhmens/fy-efi) uefi headers.

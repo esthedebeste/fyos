@@ -34,7 +34,9 @@ inline fun(*EFI_FILE_PROTOCOL) open(path: *CHAR16): EfiResult<*EFI_FILE_PROTOCOL
 fun(*EFI_FILE_PROTOCOL) get_info(): EfiResult<*EFI_FILE_INFO> {
 	let info_size: UINTN
 	this.GetInfo(this, &EFI_FILE_INFO_ID, &info_size, nullptr)
-	const file_info: *EFI_FILE_INFO = efi_malloc(info_size)
+	const file_info: *EFI_FILE_INFO = efi_malloc(info_size) or {
+		return create EfiResult<*EFI_FILE_INFO> { status = EFI_OUT_OF_RESOURCES } nullptr
+	}
 	const status = this.GetInfo(this, &EFI_FILE_INFO_ID, &info_size, file_info)
 	EfiResult(status, file_info)
 }
@@ -166,7 +168,10 @@ fun load_psf2_font(dir: *EFI_FILE_PROTOCOL, path: *CHAR16): EfiResult<PSF2_Font>
 		return create EfiResult<PSF2_Font> { status = EFI_INVALID_PARAMETER }
 	}
 	file.SetPosition(file, sizeof(PSF2_Header))
-	const glyphs: *uint8 = efi_malloc(glyph_size)
+	const glyphs: *uint8 = efi_malloc(glyph_size) or {
+		println("Failed to allocate memory for PSF2 font glyphs"c 16)
+		return create EfiResult<PSF2_Font> { status = EFI_OUT_OF_RESOURCES } nullptr
+	}
 	const status = file.Read(file, &glyph_size, glyphs)
 	if(status != EFI_SUCCESS) {
 		println("Failed to read PSF2 font file glyphs"c 16)
@@ -202,7 +207,10 @@ fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 	if(!check_kernel_header(header)) return create EfiResult<KernelFunction> { status = EFI_INVALID_PARAMETER }
 	println("Kernel file is valid"c 16)
 
-	let program_headers: *Elf64ProgramHeader = efi_malloc(header.phnum * header.phentsize)
+	const program_headers: *Elf64ProgramHeader = efi_malloc(header.phnum * header.phentsize) or {
+		println("Failed to allocate memory for program headers"c 16)
+		return create EfiResult<KernelFunction> { status = EFI_OUT_OF_RESOURCES } nullptr
+	}
 	{
 		const status = kernel_file.SetPosition(kernel_file, header.phoff)
 		if(status != EFI_SUCCESS) {
@@ -216,28 +224,28 @@ fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 			return create EfiResult<KernelFunction> { status = status }
 		}
 	}
-	const max_program_header = program_headers + header.phnum
-	let kernel_start_addr: uint64 = 0
-	let alloc_points: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
-	let requested_bytes: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
-	let requested_points: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
-	let pt_load_headers: *uint1 = efi_malloc(sizeof(uint1) * header.phnum)
+	const alloc_points:     *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
+	const requested_bytes:  *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
+	const requested_points: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
+	const pt_load_headers:  *uint1  = efi_malloc(sizeof(uint1 ) * header.phnum)
+	if(alloc_points == nullptr || requested_bytes == nullptr || requested_points == nullptr || pt_load_headers == nullptr) {
+		println("Failed to allocate memory for program headers"c 16)
+		return create EfiResult<KernelFunction> { status = EFI_OUT_OF_RESOURCES }
+	}
 	for(let i: uint64 = 0; i < header.phnum; i += 1) {
 		const pheader: *Elf64ProgramHeader = (program_headers as *uint8) + i * header.phentsize
 		if(pheader.ptype == ELF_PT_LOAD) {
 			const bytes = pheader.memsz
-			let alloc_point: uint64 = 0
 			print("Allocating "c 16) print_uint64(bytes) print(" bytes at "c 16) print_hex(pheader.vaddr) newline()
-			alloc_point = efi_malloc(bytes)
+			const alloc_point: uint64 = efi_malloc(bytes) or {
+				println("Failed to allocate memory for segment"c 16)
+				return create EfiResult<KernelFunction> { status = EFI_ERR } nullptr
+			}
 			print("Allocated at "c 16) print_hex(alloc_point) newline()
 			alloc_points[i] = alloc_point
 			requested_bytes[i] = bytes
 			requested_points[i] = pheader.vaddr
 			pt_load_headers[i] = true
-			if(alloc_point == nullptr) {
-				println("Failed to allocate memory for segment"c 16)
-				return create EfiResult<KernelFunction> { status = EFI_ERR }
-			}
 			const status = kernel_file.SetPosition(kernel_file, pheader.offset)
 			if(status != EFI_SUCCESS) {
 				println("Failed to set position in kernel file"c 16)
@@ -263,11 +271,17 @@ fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 			}
 		max_end
 	}
-	print("Allocating "c 16) print_uint64(total_bytes) print(" bytes for the full kernel"c 16) newline()
-	const full_kernel_mem: *uint8 = efi_malloc(total_bytes)
-	if(full_kernel_mem == nullptr) {
-		println("Failed to allocate memory for kernel"c 16)
-		return create EfiResult<KernelFunction> { status = EFI_ERR }
+
+	const pages_to_alloc = (total_bytes + 0xfff) / 0x1000
+	print("Allocating "c 16) print_uint64(total_bytes) print(" bytes ("c 16) print_uint64(pages_to_alloc) print(" pages) for the full kernel"c 16) newline()
+	const full_kernel_mem: *uint8 = {
+		let pages: *uint8
+		const status = boot_services.AllocatePages(AllocateAnyPages, EfiLoaderData, pages_to_alloc, &pages)
+		if(status != EFI_SUCCESS) {
+			println("Failed to allocate memory for kernel"c 16)
+			return create EfiResult<KernelFunction> { status = status }
+		}
+		pages
 	}
 	println("Copying kernel parts to final location"c 16)
 	for(let i: uint64 = 0; i < header.phnum; i += 1)
@@ -275,7 +289,7 @@ fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 		print("Copying "c 16) print_uint64(requested_bytes[i]) print(" bytes from "c 16) print_hex(alloc_points[i]) print(" to "c 16) print_hex(full_kernel_mem + requested_points[i]) newline()
 		efi_memcpy(full_kernel_mem + requested_points[i], alloc_points[i], requested_bytes[i])
 		print("Freeing "c 16) print_uint64(requested_bytes[i]) print(" bytes at "c 16) print_hex(alloc_points[i]) newline()
-		boot_services.FreePages(alloc_points[i], requested_bytes[i])
+		efi_free(alloc_points[i])
 	}
 	println("Kernel loaded"c 16)
 	create EfiResult<KernelFunction> { status = EFI_SUCCESS, value = full_kernel_mem + header.entry }
@@ -300,6 +314,7 @@ fun efi_main(ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
 		println("Loading PSF2 font..."c 16)
 		const font = load_psf2_font(root_dir, "font.psf"c 16).unwrap("Failed to load PSF2 font"c 16)
 		println("Loaded PSF2 font"c 16)
+		print("Font character resolution: "c 16) print_uint64(font.header.width) print("x"c 16) print_uint64(font.header.height) newline()
 		font
 	}
 
@@ -318,7 +333,10 @@ fun efi_main(ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
 			return status
 		}
 		memory_map_size += descriptor_size * 2
-		memory_map = efi_malloc(memory_map_size)
+		memory_map = efi_malloc(memory_map_size) or {
+			println("Failed to allocate memory for memory map"c 16)
+			return EFI_OUT_OF_RESOURCES nullptr
+		}
 		const status = boot_services.GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version)
 		if(status != EFI_SUCCESS) {
 			println("Failed to get memory map"c 16)

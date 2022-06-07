@@ -33,7 +33,6 @@ struct ElfHeader<U> {
 	shentsize: uint16,
 	shnum: uint16,
 	shstrndx: uint16,
-	__padding: uint8[2],
 }
 
 type Elf32Header = ElfHeader<uint32>
