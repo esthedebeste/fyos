@@ -1,3 +1,5 @@
+include "../shared/uintn.fy"
+
 include "../fy-efi/efi.fy"
 include "../fy-efi/protocols/file-system"
 include "../fy-efi/protocols/loaded-image"
@@ -24,7 +26,7 @@ fun load_root_image_dir(loaded_image: *EFI_LOADED_IMAGE_PROTOCOL): EfiResult<*EF
 	EfiResult(status, root)
 }
 
-inline fun(*EFI_FILE_PROTOCOL) open(path: *CHAR16): EfiResult<*EFI_FILE_PROTOCOL> {
+fun(*EFI_FILE_PROTOCOL) open(path: *CHAR16): EfiResult<*EFI_FILE_PROTOCOL> {
 	let file: *EFI_FILE_PROTOCOL
 	const status = this.Open(this, &file, path, EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY)
 	EfiResult(status, file)
@@ -32,7 +34,7 @@ inline fun(*EFI_FILE_PROTOCOL) open(path: *CHAR16): EfiResult<*EFI_FILE_PROTOCOL
 
 // remember to efi_free the result
 fun(*EFI_FILE_PROTOCOL) get_info(): EfiResult<*EFI_FILE_INFO> {
-	let info_size: UINTN
+	let info_size: uintn
 	this.GetInfo(this, &EFI_FILE_INFO_ID, &info_size, nullptr)
 	const file_info: *EFI_FILE_INFO = efi_malloc(info_size) or {
 		return create EfiResult<*EFI_FILE_INFO> { status = EFI_OUT_OF_RESOURCES } nullptr
@@ -41,7 +43,7 @@ fun(*EFI_FILE_PROTOCOL) get_info(): EfiResult<*EFI_FILE_INFO> {
 	EfiResult(status, file_info)
 }
 
-include "./elf.fy"
+include "../shared/elf"
 fun check_kernel_header(header: Elf64Header) {
 	if(header.ident.magic[0] != 0x7f ||
 	   header.ident.magic[1] != 'E' ||
@@ -81,7 +83,7 @@ fun check_kernel_header(header: Elf64Header) {
 	true
 }
 
-include "./framebuffer.fy"
+include "../shared/framebuffer"
 fun init_framebuffer(): EfiResult<Framebuffer> {
 	let gop: *EFI_GRAPHICS_OUTPUT_PROTOCOL
 	const status = boot_services.LocateProtocol(&EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, null, &gop)
@@ -91,7 +93,7 @@ fun init_framebuffer(): EfiResult<Framebuffer> {
 	}
 
 	let info: *EFI_GRAPHICS_OUTPUT_MODE_INFORMATION
-	let info_size: UINTN
+	let info_size: uintn
 	let status = gop.QueryMode(gop, if(gop.Mode) gop.Mode.Mode else 0u, &info_size, &info)
 	if(status == EFI_NOT_STARTED)
 		status = gop.SetMode(gop, 0)
@@ -134,7 +136,7 @@ fun init_framebuffer(): EfiResult<Framebuffer> {
 	})
 }
 
-include "./psf.fy"
+include "../shared/psf2"
 fun load_psf2_font(dir: *EFI_FILE_PROTOCOL, path: *CHAR16): EfiResult<PSF2_Font> {
 	const file = dir.open(path).unwrap("Failed to open PSF2 font file"c 16)
 	const info = file.get_info().unwrap("Failed to get info of PSF2 font file"c 16)
@@ -184,7 +186,7 @@ fun load_psf2_font(dir: *EFI_FILE_PROTOCOL, path: *CHAR16): EfiResult<PSF2_Font>
 	})
 }
 
-include "./bootinfo.fy"
+include "../shared/bootinfo"
 type KernelFunction = *fun cc(X8664SysV)(*BootInfo): EFI_STATUS
 fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 	const kernel_file = root_dir.open("kernel.elf"c 16).unwrap("Failed to open kernel.elf"c 16)
@@ -193,16 +195,30 @@ fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 	{
 		const file_info = kernel_file.get_info().unwrap("Failed to get kernel.elf info"c 16)
 		let header_size = sizeof(Elf64Header)
-		if(file_info.Size < header_size) {
-			println("Kernel file is too small"c 16)
+		if(file_info.FileSize < header_size) {
+			println("Kernel file is too small to fit elf header"c 16)
 			return create EfiResult<KernelFunction> { status = EFI_ERR }
 		}
-		efi_free(file_info)
 		const status = kernel_file.Read(kernel_file, &header_size, &header)
 		if(status != EFI_SUCCESS) {
 			println("Failed to read header"c 16)
 			return create EfiResult<KernelFunction> { status = status }
 		}
+
+		if(file_info.FileSize < header.phoff + header.phnum * header.phentsize) {
+			println("Kernel file is too small to fit program headers. "c 16)
+			print("Kernel file size: "c 16)
+			print_uint64(file_info.FileSize) newline()
+			print("Expected size: >="c 16)
+			print_uint64(header.phoff + header.phnum * header.phentsize)
+			newline()
+			print("phoff: "c 16) print_uint64(header.phoff)
+			print(", phnum: "c 16) print_uint64(header.phnum)
+			print(", phentsize: "c 16) print_uint64(header.phentsize)
+			newline()
+			return create EfiResult<KernelFunction> { status = EFI_ERR }
+		}
+		efi_free(file_info)
 	}
 	if(!check_kernel_header(header)) return create EfiResult<KernelFunction> { status = EFI_INVALID_PARAMETER }
 	println("Kernel file is valid"c 16)
@@ -212,69 +228,36 @@ fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 		return create EfiResult<KernelFunction> { status = EFI_OUT_OF_RESOURCES } nullptr
 	}
 	{
-		const status = kernel_file.SetPosition(kernel_file, header.phoff)
-		if(status != EFI_SUCCESS) {
-			println("Failed to set position in kernel file"c 16)
-			return create EfiResult<KernelFunction> { status = status }
+		let pos: uint64
+		kernel_file.GetPosition(kernel_file, &pos)
+		if(pos != header.phoff) {
+			const status = kernel_file.SetPosition(kernel_file, header.phoff)
+			if(status != EFI_SUCCESS) {
+				println("Failed to set position in kernel file"c 16)
+				return create EfiResult<KernelFunction> { status = status }
+			}
 		}
 		let phsize = header.phnum * header.phentsize
+		println("Reading program headers"c 16) print_uint64(phsize) newline()
 		const status = kernel_file.Read(kernel_file, &phsize, program_headers)
+		println("Read program headers"c 16)
 		if(status != EFI_SUCCESS) {
 			println("Failed to read kernel program headers"c 16)
 			return create EfiResult<KernelFunction> { status = status }
 		}
 	}
-	const alloc_points:     *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
-	const requested_bytes:  *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
-	const requested_points: *uint64 = efi_malloc(sizeof(uint64) * header.phnum)
-	const pt_load_headers:  *uint1  = efi_malloc(sizeof(uint1 ) * header.phnum)
-	if(alloc_points == nullptr || requested_bytes == nullptr || requested_points == nullptr || pt_load_headers == nullptr) {
-		println("Failed to allocate memory for program headers"c 16)
-		return create EfiResult<KernelFunction> { status = EFI_OUT_OF_RESOURCES }
-	}
+	let total_size: uintn = 0
 	for(let i: uint64 = 0; i < header.phnum; i += 1) {
 		const pheader: *Elf64ProgramHeader = (program_headers as *uint8) + i * header.phentsize
 		if(pheader.ptype == ELF_PT_LOAD) {
-			const bytes = pheader.memsz
-			print("Allocating "c 16) print_uint64(bytes) print(" bytes at "c 16) print_hex(pheader.vaddr) newline()
-			const alloc_point: uint64 = efi_malloc(bytes) or {
-				println("Failed to allocate memory for segment"c 16)
-				return create EfiResult<KernelFunction> { status = EFI_ERR } nullptr
-			}
-			print("Allocated at "c 16) print_hex(alloc_point) newline()
-			alloc_points[i] = alloc_point
-			requested_bytes[i] = bytes
-			requested_points[i] = pheader.vaddr
-			pt_load_headers[i] = true
-			const status = kernel_file.SetPosition(kernel_file, pheader.offset)
-			if(status != EFI_SUCCESS) {
-				println("Failed to set position in kernel file"c 16)
-				return create EfiResult<KernelFunction> { status = status }
-			}
-			const status = kernel_file.Read(kernel_file, &pheader.filesz, alloc_point)
-			if(status != EFI_SUCCESS) {
-				println("Failed to read segment"c 16)
-				return create EfiResult<KernelFunction> { status = status }
-			} null
-		} else {
-			pt_load_headers[i] = false
-			print("Skipping program header of non PT_LOAD type: "c 16) print_hex(pheader.ptype) newline() null
+			const end: uintn = pheader.vaddr + pheader.memsz
+			if(end > total_size) total_size = end
 		}
 	}
 
-	const total_bytes = {
-		let max_end: uint64 = 0
-		for(let i: uint64 = 0; i < header.phnum; i += 1)
-			if(pt_load_headers[i]) {
-				const end = requested_points[i] + requested_bytes[i]
-				if(end > max_end) max_end = end
-			}
-		max_end
-	}
-
-	const pages_to_alloc = (total_bytes + 0xfff) / 0x1000
-	print("Allocating "c 16) print_uint64(total_bytes) print(" bytes ("c 16) print_uint64(pages_to_alloc) print(" pages) for the full kernel"c 16) newline()
-	const full_kernel_mem: *uint8 = {
+	const pages_to_alloc = (total_size + 0xfff) / 0x1000
+	print("Allocating "c 16) print_uint64(pages_to_alloc) print(" pages ("c 16) print_uint64(total_size) print(" bytes) for the full kernel"c 16) newline()
+	const kernel_address: *uint8 = {
 		let pages: *uint8
 		const status = boot_services.AllocatePages(AllocateAnyPages, EfiLoaderData, pages_to_alloc, &pages)
 		if(status != EFI_SUCCESS) {
@@ -283,16 +266,31 @@ fun load_kernel(root_dir: *EFI_FILE_PROTOCOL): EfiResult<KernelFunction> {
 		}
 		pages
 	}
-	println("Copying kernel parts to final location"c 16)
-	for(let i: uint64 = 0; i < header.phnum; i += 1)
-	if(pt_load_headers[i]) {
-		print("Copying "c 16) print_uint64(requested_bytes[i]) print(" bytes from "c 16) print_hex(alloc_points[i]) print(" to "c 16) print_hex(full_kernel_mem + requested_points[i]) newline()
-		efi_memcpy(full_kernel_mem + requested_points[i], alloc_points[i], requested_bytes[i])
-		print("Freeing "c 16) print_uint64(requested_bytes[i]) print(" bytes at "c 16) print_hex(alloc_points[i]) newline()
-		efi_free(alloc_points[i])
+
+
+	for(let i: uint64 = 0; i < header.phnum; i += 1) {
+		const pheader: *Elf64ProgramHeader = (program_headers as *uint8) + i * header.phentsize
+		if(pheader.ptype == ELF_PT_LOAD) {
+			const status = kernel_file.SetPosition(kernel_file, pheader.offset)
+			if(status != EFI_SUCCESS) {
+				println("Failed to set position in kernel file"c 16)
+				return create EfiResult<KernelFunction> { status = status }
+			}
+			const mem_pos = kernel_address + pheader.vaddr
+			const status = kernel_file.Read(kernel_file, &pheader.filesz, mem_pos)
+			if(status != EFI_SUCCESS) {
+				println("Failed to read segment"c 16)
+				return create EfiResult<KernelFunction> { status = status }
+			}
+		}
 	}
+
+	kernel_file.Close(kernel_file)
 	println("Kernel loaded"c 16)
-	create EfiResult<KernelFunction> { status = EFI_SUCCESS, value = full_kernel_mem + header.entry }
+	create EfiResult<KernelFunction> {
+		status = EFI_SUCCESS,
+		value = kernel_address + header.entry,
+	}
 }
 
 fun efi_main(ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
@@ -318,13 +316,14 @@ fun efi_main(ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
 		font
 	}
 
-	const kernel_start: KernelFunction = load_kernel(root_dir).unwrap("Failed to load kernel"c 16)
+	const kernel_entry: KernelFunction = load_kernel(root_dir).unwrap("Failed to load kernel"c 16)
+	print("Kernel entry point: "c 16) print_hex(kernel_entry) newline()
 
 	println("Exiting boot services..."c 16)
-	let memory_map_size: UINTN = 0
+	let memory_map_size: uintn = 0
 	let memory_map: *EFI_MEMORY_DESCRIPTOR = nullptr
-	let memory_map_key: UINTN = 0
-	let descriptor_size: UINTN = 0
+	let memory_map_key: uintn = 0
+	let descriptor_size: uintn = 0
 	let descriptor_version: UINT32 = 0
 	{
 		const status = boot_services.GetMemoryMap(&memory_map_size, memory_map, &memory_map_key, &descriptor_size, &descriptor_version)
@@ -352,13 +351,16 @@ fun efi_main(ih: EFI_HANDLE, st: *EFI_SYSTEM_TABLE): EFI_STATUS {
 	let boot_info = create BootInfo {
 		framebuffer = framebuffer,
 		font = font,
-		mem_map = memory_map,
-		mem_map_size = memory_map_size,
-		mem_desc_size = descriptor_size,
+		memmap = create MemoryMap {
+			descriptors = memory_map,
+			full_size = memory_map_size,
+			descriptor_size = descriptor_size,
+			page_count = page_count(memory_map, memory_map_size, descriptor_size),
+		},
 		runtime_services = runtime_services,
 	}
 
-	const kernel_ret = kernel_start(&boot_info)
+	const kernel_ret = kernel_entry(&boot_info)
 	kernel_ret
 }
 

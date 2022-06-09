@@ -1,8 +1,11 @@
-include "../bootloader/bootinfo.fy"
+include "../shared/uintn.fy"
+
+include "../shared/bootinfo"
 include "../fy-efi/src/status" // main returns an EFI_STATUS
 include "std/types"
 include "./display"
 include "./memory"
+include "./allocator"
 
 const WHITE = create RGBAColor { red = 255, green = 255, blue = 255 }
 const BLACK = create RGBAColor { red = 0, green = 0, blue = 0 }
@@ -22,7 +25,6 @@ fun sleep(nanoseconds: uint64) {
 		diff += (curr.Nanosecond - prev.Nanosecond)
 		prev = curr
 	}
-	null
 }
 
 fun shutdown(status: EFI_STATUS) {
@@ -35,8 +37,25 @@ fun shutdown(status: EFI_STATUS) {
 	runtime_services.ResetSystem(EfiResetShutdown, status, 0, null)
 }
 
+fun show_gradient()
+	for(let y = 50; y <= 200; y += 1)
+	for(let x = 50; x <= 200; x += 1)
+		display.framebuffer.set_pixel(display.width() - 250 + x, y, create RGBAColor {
+			red = x - 50,
+			green = y - 50,
+			blue = (y + x - 100) / 2,
+		})
+
+fun print_kib(kib: uint64) {
+	display.print(kib) display.print(" KiB")
+	if(kib > 1024) { display.print(" | ") display.print(kib / 1024) display.print(" MiB") }
+	if(kib > 1024 * 1024) { display.print(" | ") display.print(kib / (1024 * 1024)) display.print(" GiB") }
+	null
+}
+
 let boot_info: BootInfo
 let display: Display
+let allocator: Allocator
 fun main cc(X8664SysV) (bi: *BootInfo): EFI_STATUS {
 	boot_info = *bi
 	display = create Display {
@@ -46,34 +65,25 @@ fun main cc(X8664SysV) (bi: *BootInfo): EFI_STATUS {
 		y = 0,
 		color = WHITE,
 	}
-	display.framebuffer.clear()
-	display.print("Hello from the kernel! :)\n")
-	display.print("MemMap size: ") display.print(boot_info.mem_map_size) display.print(" bytes\n")
-	display.print("MemDesc size: ") display.print(boot_info.mem_desc_size) display.print(" bytes\n")
-	display.print("MemMap start: ") display.print_hex(boot_info.mem_map) display.print("\n")
-	const entries: uint64 = boot_info.mem_map_size / boot_info.mem_desc_size
-	display.print("Memory entries: ") display.print(entries) display.print("\n")
-	const trunc_entries = if(entries > 40) {
-		display.print("Truncating to 40 entries\n")
-		40 as uint64
-	} else entries
-	for(let i: uint64 = 0; i < trunc_entries; i += 1) {
-		const desc = boot_info.get_descriptor(i)
-		display.print("Memory entry ") if(i < 10 && trunc_entries >= 10) display.print('0') display.print(i) display.print(": ")
-		const KiB = desc.NumberOfPages * 4
-		display.print(KiB) display.print(" KiB")
-		if(KiB > 1024) { display.print(" / ") display.print(KiB / 1024) display.print(" MiB") }
-		if(KiB > 1024 * 1024) { display.print(" / ") display.print(KiB / (1024 * 1024)) display.print(" GiB") }
 
-		display.print(", ") display.print(efi_mem_type_to_str(desc.Type)) display.print("\n")
-	}
-	for(let y = 50; y <= 200; y += 1)
-	for(let x = 50; x <= 200; x += 1)
-		display.framebuffer.set_pixel(display.width() - 250 + x, y, create RGBAColor {
-			red = x - 50,
-			green = y - 50,
-			blue = (y + x - 100) / 2,
-		})
+	display.framebuffer.clear()
+	show_gradient()
+	display.print("Hello from the kernel! :)\n")
+
+	allocator = Allocator(boot_info.memmap)
+	print_memory_info()
+
+	display.print("Free pages: ") display.print(allocator.free_count) display.print("\n")
+	display.print("Allocated pages: ") display.print(allocator.used_count) display.print("\n")
+	display.print("Reserved pages: ") display.print(allocator.reserved_count) display.print("\n")
+	display.print("Total pages: ") display.print(allocator.total_count) display.print("\n")
+	const alloc = allocator.request_pages(5)
+	display.print("Allocated 5 pages at ") display.print_hex(alloc) display.print("\n")
+	display.print("Free pages: ") display.print(allocator.free_count) display.print("\n")
+	display.print("Allocated pages: ") display.print(allocator.used_count) display.print("\n")
+	display.print("Reserved pages: ") display.print(allocator.reserved_count) display.print("\n")
+	display.print("Total pages: ") display.print(allocator.total_count) display.print("\n")
+
 
 	display.print("Goodbye! :)")
 	while(true) 0 // halt

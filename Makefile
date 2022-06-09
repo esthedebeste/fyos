@@ -33,7 +33,7 @@ kernel: $(bindir)/kernel.elf $(bindir)/font.psf
 build: kernel bootloader
 
 run: build
-	cd $(bindir) && uefi-run bootloader.efi -f kernel.elf -f font.psf && cd ..
+	cd $(bindir) && uefi-run bootloader.efi -f kernel.elf -f font.psf -- -m 512M && cd ..
 
 clean:
 	rm -rf $(bindir)/*

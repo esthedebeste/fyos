@@ -15,5 +15,5 @@ struct PSF2_Font {
 	glyphs: *uint8,
 }
 
-inline fun(PSF2_Font | *PSF2_Font) glyph(index: uint32): *uint8
+fun(PSF2_Font | *PSF2_Font) glyph(index: uint32): *uint8
 	this.glyphs + index * this.header.glyphsize

@@ -1,5 +1,5 @@
-include "../bootloader/framebuffer.fy"
-include "../bootloader/psf.fy"
+include "../shared/framebuffer"
+include "../shared/psf2"
 
 struct Display {
 	framebuffer: Framebuffer,
@@ -50,28 +50,21 @@ fun(*Display) put_strr(begin: *char, end: *char)
 	for(let chr = begin; chr < end; chr += 1)
 		this.put_char(*chr)
 
-fun(*Display) put_cstr(begin: *char) {
-	let chr = begin
-	while(*chr != '\0') {
+fun(*Display) put_cstr(begin: *char)
+	for(let chr = begin; *chr != '\0'; chr += 1)
 		this.put_char(*chr)
-		chr += 1
-	}
-	null
-}
 
-fun(*Display) put_strl(str: *char, len: uint_ptrsize)
+fun(*Display) put_strl(str: *char, len: uintn)
 	this.put_strr(str, str + len)
 
 fun uint64tostr(num: uint64, buffer: *char[20]): *char {
 	let begin = (buffer as *char) + 20
-	let n = num
-	while(n != 0) {
+	for(let n = num; n != 0; n /= 10) {
 		begin -= 1
 		begin[0] = (n % 10) + '0'
-		n /= 10 null
 	} else {
 		begin -= 1
-		begin[0] = '0' null
+		begin[0] = '0'
 	}
 	begin
 }
@@ -84,7 +77,7 @@ fun(*Display) print_uint64(num: uint64) {
 	this.put_strr(begin, end)
 }
 
-inline fun(*Display) print(val: char[generic Len] | *char[generic Len] | uint64 | char | *char)
+fun(*Display) print(val: char[generic Len] | *char[generic Len] | uint64 | char | *char)
 	if(typeof(val) == char[generic Len]) {
 		let p = val
 		this.put_strl(&p, Len)
@@ -97,21 +90,23 @@ inline fun(*Display) print(val: char[generic Len] | *char[generic Len] | uint64 
 	else if(typeof(val) == char)
 		this.put_char(val)
 
-fun uint64tohex(num: uint64, buffer: *char[10]) {
-	const buf: *char = buffer
-	let n: uint64 = num
-	buf[0] = '0'
-	buf[1] = 'x'
-	for (let i = 0; i < 8; i += 1) {
+fun uint64tohex(num: uint64, buffer: *char[16]): *char {
+	let begin = (buffer as *char) + 16
+	for(let n = num; n != 0; n = n >> 4) {
+		begin -= 1
 		const c = (n & 0xf) + '0'
-		buf[9 - i] = if (c > '9') c - '9' + 'a' - 1 else c
-		n = n >> 4
+		begin[0] = if (c > '9') c - '9' + 'a' - 1 else c
+	} else {
+		begin -= 1
+		begin[0] = '0'
 	}
-	null
+	begin
 }
 
 fun(*Display) print_hex(num: uint64) {
-	let buffer: char[10]
-	uint64tohex(num, &buffer)
-	this.print(&buffer)
+	this.print("0x")
+	let buffer: char[16]
+	const end = &buffer[16]
+	const begin = uint64tohex(num, &buffer)
+	this.put_strr(begin, end)
 }

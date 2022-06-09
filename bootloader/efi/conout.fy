@@ -6,7 +6,7 @@ inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) print(string: *CHAR16): EFI_STATUS
 const NEWLINE = "\r\n"c 16
 inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) newline() this.print(NEWLINE)
 
-inline fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) println(string: *CHAR16): EFI_STATUS {
+fun(*EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL) println(string: *CHAR16): EFI_STATUS {
 	this.print(string)
 	this.newline()
 }
