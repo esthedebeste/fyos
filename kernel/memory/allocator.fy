@@ -1,8 +1,8 @@
-include "./memory"
+include "../../fy-efi/src/memory.fy"
 include "./bitarray"
-include "./utils"
+include "../utils"
 
-const PAGE_SIZE = 4096
+const PAGE_SIZE: uintn = 4096
 struct Allocator {
 	memmap: MemoryMap,
 	bitmap: BitArray,
@@ -27,11 +27,11 @@ fun Allocator(memmap: MemoryMap): Allocator {
 		}
 	}
 	if(!found) {
-		display.print("Could not find a large enough region to put the allocator bitmap.")
+		display.print("Could not find a large enough region to put the allocator bitmap. "p)
 		return null
 	}
 
-	display.print("Putting allocator bitmap at ") display.print_hex(bitmap_loc) display.print(" - ") display.print_hex(bitmap_loc + bitmap_page_size * PAGE_SIZE) display.print("\n")
+	display.print("Putting allocator bitmap at "p) display.print_hex(bitmap_loc) display.print(" - "p) display.print_hex(bitmap_loc + bitmap_page_size * PAGE_SIZE) display.print("\n"p)
 
 	const bitmap = create BitArray {
 		size = bitmap_size,
@@ -48,12 +48,13 @@ fun Allocator(memmap: MemoryMap): Allocator {
 		total_count = memmap.page_count,
 	}
 
-	allocator.use_pages(bitmap_loc, bitmap_page_size)
+	allocator.use_pages(bitmap_loc / PAGE_SIZE, bitmap_page_size)
 
 	for(let iter: *uint8 = memmap.descriptors; iter < memmap_end; iter += memmap.descriptor_size) {
 		const descriptor: *EFI_MEMORY_DESCRIPTOR = iter
-		if(descriptor.Type != EfiConventionalMemory)
-			allocator.reserve_pages(descriptor.PhysicalStart, descriptor.NumberOfPages)
+		if(descriptor.Type != EfiConventionalMemory) {
+			allocator.reserve_pages(descriptor.PhysicalStart / PAGE_SIZE, descriptor.NumberOfPages)
+		}
 	}
 	allocator
 }
@@ -67,6 +68,12 @@ fun(*Allocator) request_page(): *uint8 {
 			return (page * PAGE_SIZE) as *uint8
 		}
 	}
+}
+
+fun(*Allocator) request_zerod_page(): *uint8 {
+	const page = this.request_page()
+	memset(page, 0, PAGE_SIZE)
+	page
 }
 
 fun(*Allocator) request_pages(count: uintn): *uint8 {
@@ -91,52 +98,52 @@ fun(*Allocator) request_pages(count: uintn): *uint8 {
 }
 
 
-fun(*Allocator) free_page(address: *uint8) {
-	const index = address / PAGE_SIZE
-	this.bitmap.set(index, false)
+fun(*Allocator) free_page(page: uintn) {
+	this.bitmap.set(page, false)
 	this.free_count += 1
 	this.used_count -= 1
 	null
 }
 
-fun(*Allocator) free_pages(address: *uint8, count: uintn) {
-	const page = address / PAGE_SIZE
+fun(*Allocator) free_pages(from: uintn, count: uintn) {
 	for (let i: uintn = 0; i < count; i += 1)
-		this.bitmap.set(page + i, false)
+		this.bitmap.set(from + i, false)
 	this.used_count -= count
 	this.free_count += count
 	null
 }
 
-fun(*Allocator) use_page(address: uintn) {
-	const index = address / PAGE_SIZE
-	this.bitmap.set(index, true)
+fun(*Allocator) use_page(page: uintn) {
+	if(this.bitmap.get(page) == true) {
+		display.print("Allocator: use_page: page "p) display.print_hex(page * PAGE_SIZE) display.print(" is already used\n"p)
+	}
+	this.bitmap.set(page, true)
 	this.used_count += 1
 	this.free_count -= 1
 	null
 }
 
-fun(*Allocator) use_pages(address: uintn, count: uintn) {
-	const page = address / PAGE_SIZE
+fun(*Allocator) use_pages(from: uintn, count: uintn) {
 	for (let i: uintn = 0; i < count; i += 1)
-		this.bitmap.set(page + i, true)
+		this.bitmap.set(from + i, true)
 	this.used_count += count
 	this.free_count -= count
 	null
 }
 
-fun(*Allocator) reserve_page(address: uintn) {
-	const index = address / PAGE_SIZE
-	this.bitmap.set(index, true)
+fun(*Allocator) reserve_page(page: uintn) {
+	if(this.bitmap.get(page) == true) {
+		display.print("Allocator: reserve_page: page "p) display.print_hex(page * PAGE_SIZE) display.print(" is already used\n"p)
+	}
+	this.bitmap.set(page, true)
 	this.reserved_count += 1
 	this.free_count -= 1
 	null
 }
 
-fun(*Allocator) reserve_pages(address: uintn, count: uintn) {
-	const page = address / PAGE_SIZE
+fun(*Allocator) reserve_pages(from: uintn, count: uintn) {
 	for (let i: uintn = 0; i < count; i += 1)
-		this.bitmap.set(page + i, true)
+		this.bitmap.set(from + i, true)
 	this.reserved_count += count
 	this.free_count -= count
 	null

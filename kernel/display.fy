@@ -9,8 +9,13 @@ struct Display {
 	color: RGBAColor,
 }
 
-inline fun(Display) width() this.framebuffer.width
-inline fun(Display) height() this.framebuffer.height
+fun(Display) width() this.framebuffer.width
+fun(Display) height() this.framebuffer.height
+
+fun(Display) clear() {
+	memset(this.framebuffer.pixels, 0, this.framebuffer.size)
+	null
+}
 
 fun(*Display) put_char(char: char) {
 	if(char == '\n') {
@@ -104,7 +109,7 @@ fun uint64tohex(num: uint64, buffer: *char[16]): *char {
 }
 
 fun(*Display) print_hex(num: uint64) {
-	this.print("0x")
+	this.print("0x"p)
 	let buffer: char[16]
 	const end = &buffer[16]
 	const begin = uint64tohex(num, &buffer)

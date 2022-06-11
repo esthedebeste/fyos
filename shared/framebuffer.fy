@@ -13,8 +13,11 @@ struct Framebuffer {
 }
 
 
-inline fun(Framebuffer) set_pixel(x: uint, y: uint, color: RGBAColor)
+fun(*Framebuffer) set_pixel(x: uint, y: uint, color: RGBAColor)
 	this.pixels[y * this.pixels_per_scanline + x] = color
+
+fun(Framebuffer | *Framebuffer) get_pixel(x: uint, y: uint)
+	this.pixels[y * this.pixels_per_scanline + x]
 
 fun(Framebuffer) move_up(up: uint) {
 	for(let y = 0; y < this.height - up; y += 1)
