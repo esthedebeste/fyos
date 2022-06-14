@@ -38,22 +38,13 @@ struct PageMapIndex {
 	page_index: uint64,
 }
 
-fun PageMapIndex(vaddr: uint64) {
-	let vad = vaddr >> 12
-	let page_index = vad & 0x1ff
-	vad = vad >> 9
-	let pt_index = vad & 0x1ff
-	vad = vad >> 9
-	let pd_index = vad & 0x1ff
-	vad = vad >> 9
-	let pdp_index = vad & 0x1ff
+fun PageMapIndex(vaddr: uint64)
 	create PageMapIndex {
-		page_index = page_index,
-		pt_index = pt_index,
-		pd_index = pd_index,
-		pdp_index = pdp_index,
+		page_index = (vaddr >> 12) & 0x1ff,
+		pt_index = (vaddr >> 21) & 0x1ff,
+		pd_index = (vaddr >> 30) & 0x1ff,
+		pdp_index = (vaddr >> 39) & 0x1ff,
 	}
-}
 
 struct PageTableManager {
 	pml4: *PageTable,
@@ -74,34 +65,30 @@ fun(*PageTableManager) map_memory(virtual: *uint8, physical: *uint8) {
 
 	const pde = &this.pml4.entries[index.pdp_index]
 	const pdp: *PageTable = if(!pde.get_bitflag(PDE_FLAG_PRESENT)) {
-		const prev = allocator.used_count
 		const page = allocator.request_zerod_page()
 		pde.set_address(page)
 		pde.set_bitflag(PDE_FLAG_PRESENT, true)
 		pde.set_bitflag(PDE_FLAG_RW, true)
 		page as *PageTable
-	} else (pde.get_address() as uintn << 12) as *PageTable
-
+	} else pde.get_address() as *PageTable
 
 	const pde = &pdp.entries[index.pd_index]
 	const pd: *PageTable = if(!pde.get_bitflag(PDE_FLAG_PRESENT)) {
-		const prev = allocator.used_count
 		const page = allocator.request_zerod_page()
 		pde.set_address(page)
 		pde.set_bitflag(PDE_FLAG_PRESENT, true)
 		pde.set_bitflag(PDE_FLAG_RW, true)
 		page as *PageTable
-	} else (pde.get_address() as uintn << 12) as *PageTable
+	} else pde.get_address() as *PageTable
 
 	const pde = &pd.entries[index.pt_index]
 	const pt: *PageTable = if(!pde.get_bitflag(PDE_FLAG_PRESENT)) {
-		const prev = allocator.used_count
 		const page = allocator.request_zerod_page()
 		pde.set_address(page)
 		pde.set_bitflag(PDE_FLAG_PRESENT, true)
 		pde.set_bitflag(PDE_FLAG_RW, true)
 		page as *PageTable
-	} else (pde.get_address() as uintn << 12) as *PageTable
+	} else pde.get_address() as *PageTable
 
 	const pde = &pt.entries[index.page_index]
 	pde.set_address(physical)

@@ -31,7 +31,7 @@ fun Allocator(memmap: MemoryMap): Allocator {
 		return null
 	}
 
-	display.print("Putting allocator bitmap at "p) display.print_hex(bitmap_loc) display.print(" - "p) display.print_hex(bitmap_loc + bitmap_page_size * PAGE_SIZE) display.print("\n"p)
+	display.print("Putting allocator bitmap at "p) display.print_hex(bitmap_loc) display.print(" - "p) display.print_hex(bitmap_loc + bitmap_page_size * PAGE_SIZE) display.newline()
 
 	const bitmap = create BitArray {
 		size = bitmap_size,
@@ -115,7 +115,7 @@ fun(*Allocator) free_pages(from: uintn, count: uintn) {
 
 fun(*Allocator) use_page(page: uintn) {
 	if(this.bitmap.get(page) == true) {
-		display.print("Allocator: use_page: page "p) display.print_hex(page * PAGE_SIZE) display.print(" is already used\n"p)
+		display.print("Allocator: use_page: page "p) display.print_hex(page * PAGE_SIZE) display.println(" is already used"p)
 	}
 	this.bitmap.set(page, true)
 	this.used_count += 1
@@ -133,7 +133,7 @@ fun(*Allocator) use_pages(from: uintn, count: uintn) {
 
 fun(*Allocator) reserve_page(page: uintn) {
 	if(this.bitmap.get(page) == true) {
-		display.print("Allocator: reserve_page: page "p) display.print_hex(page * PAGE_SIZE) display.print(" is already used\n"p)
+		display.print("Allocator: reserve_page: page "p) display.print_hex(page * PAGE_SIZE) display.println(" is already used"p)
 	}
 	this.bitmap.set(page, true)
 	this.reserved_count += 1

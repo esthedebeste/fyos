@@ -17,13 +17,17 @@ fun(Display) clear() {
 	null
 }
 
+fun(*Display) newline() {
+	this.y += this.font.header.height
+	this.x = 0
+}
+
 fun(*Display) put_char(char: char) {
-	if(char == '\n') {
-		this.y += this.font.header.height
+	if(char == '\n')
+		this.newline()
+	else if(char == '\r')
 		this.x = 0
-	} else if(char == '\r') {
-		this.x = 0
-	} else {
+	else {
 		let font_ptr = this.font.glyph(char)
 		const glyph_height = this.font.header.height
 		const glyph_width = this.font.header.width
@@ -40,13 +44,12 @@ fun(*Display) put_char(char: char) {
 		}
 		this.x += this.font.header.width
 	}
-	if(this.x >= this.framebuffer.width) {
-		this.x = 0
-		this.y += this.font.header.height
-	}
+	if(this.x >= this.framebuffer.width)
+		this.newline()
 	if(this.y >= this.framebuffer.height) {
+		const diff = this.y - this.framebuffer.height + this.font.header.height
 		this.y = this.framebuffer.height - this.font.header.height
-		this.framebuffer.move_up(this.font.header.height)
+		this.framebuffer.move_up(diff)
 	}
 	null
 }
@@ -94,6 +97,11 @@ fun(*Display) print(val: char[generic Len] | *char[generic Len] | uint64 | char 
 		this.put_cstr(val)
 	else if(typeof(val) == char)
 		this.put_char(val)
+
+fun(*Display) println(val: generic T) {
+	this.print(val)
+	this.newline()
+}
 
 fun uint64tohex(num: uint64, buffer: *char[16]): *char {
 	let begin = (buffer as *char) + 16

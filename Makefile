@@ -11,6 +11,10 @@ bin/bootloader.ll: bootloader/**/*.fy bootloader/*.fy
 
 bin/kernel.o: bin/kernel.ll
 	clang $(kernelflags) -c $^ -o $@
+	@if [ -n "${DEBUG}" ]; then								\
+		clang $(kernelflags) -c $^ -o $@.S -S;				\
+		clang $(kernelflags) -c $^ -o $@.ll -S -emit-llvm;	\
+	fi
 
 bin/bootloader.obj: bin/bootloader.ll
 	clang $(efiflags) -c $^ -o $@
